@@ -26,6 +26,10 @@ export function addDays(dateKey: string, delta: number): string {
   return formatDateKey(d)
 }
 
+export function formatDateRange(startDate: string, endDate: string): string {
+  return startDate === endDate ? startDate : `${startDate} 至 ${endDate}`
+}
+
 export function formatDateNav(dateKey: string): string {
   const d = parseDateKey(dateKey)
   const y = d.getFullYear()
@@ -40,6 +44,12 @@ export function minutesToTime(m: number): string {
   const h = Math.floor(m / 60)
   const min = m % 60
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+}
+
+export function timeToMinutes(value: string): number | null {
+  const [h, m] = value.split(':').map(Number)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null
+  return clampMinutes(h * 60 + m)
 }
 
 export function formatDuration(minutes: number): string {

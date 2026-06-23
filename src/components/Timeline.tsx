@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   BASE_PX_PER_MINUTE,
   TIMELINE_END,
@@ -24,6 +24,12 @@ interface TimelineProps {
   dateKey: string
   entries: TimeEntry[]
   onCreate: (draft: DraftEntry) => Promise<void>
+  onUpdate: (
+    id: string,
+    patch: Partial<
+      Pick<TimeEntry, 'title' | 'notes' | 'start_minutes' | 'end_minutes'>
+    >,
+  ) => Promise<void>
   onCycleEfficiency: (entry: TimeEntry) => Promise<Efficiency>
   onDelete: (id: string) => void
 }
@@ -34,11 +40,16 @@ interface DragState {
 }
 
 const DEFAULT_ZOOM_INDEX = 1
+const POPOVER_HEIGHT = 340
+const POPOVER_WIDTH = 288
+const POPOVER_GAP = 12
+type PopoverSide = 'left' | 'right' | 'inside'
 
 export function Timeline({
   dateKey,
   entries,
   onCreate,
+  onUpdate,
   onCycleEfficiency,
   onDelete,
 }: TimelineProps) {
@@ -52,7 +63,9 @@ export function Timeline({
   const [drag, setDrag] = useState<DragState | null>(null)
   const [hoverY, setHoverY] = useState<number | null>(null)
   const [draft, setDraft] = useState<DraftEntry | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [popoverTop, setPopoverTop] = useState(0)
+  const [popoverSide, setPopoverSide] = useState<PopoverSide>('right')
   const [nowMinutes, setNowMinutes] = useState(getCurrentMinutes())
 
   const showNowLine = isToday(dateKey)
@@ -70,21 +83,22 @@ export function Timeline({
     return Math.max(0, Math.min(height, e.clientY - rect.top))
   }
 
-  const zoomIn = useCallback(() => {
-    setZoomIndex((i) => Math.min(ZOOM_LEVELS.length - 1, i + 1))
-  }, [])
-
-  const zoomOut = useCallback(() => {
-    setZoomIndex((i) => Math.max(0, i - 1))
-  }, [])
-
-  // Ctrl+滚轮缩放时间轴精度
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault()
-      if (e.deltaY < 0) zoomIn()
-      else zoomOut()
+  const placePopover = (rawTop: number) => {
+    const track = trackRef.current
+    const scroller = scrollRef.current
+    if (!track || !scroller) {
+      setPopoverTop(Math.max(8, rawTop))
+      setPopoverSide('right')
+      return
     }
+
+    const rect = track.getBoundingClientRect()
+    const hasRightRoom = rect.right + POPOVER_GAP + POPOVER_WIDTH < window.innerWidth - 12
+    const hasLeftRoom = rect.left - POPOVER_GAP - POPOVER_WIDTH > 12
+    const visibleTop = scroller.scrollTop + 8
+    const visibleBottom = scroller.scrollTop + scroller.clientHeight - POPOVER_HEIGHT - 8
+    setPopoverSide(hasRightRoom ? 'right' : hasLeftRoom ? 'left' : 'inside')
+    setPopoverTop(Math.max(visibleTop, Math.min(rawTop, visibleBottom)))
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -122,7 +136,8 @@ export function Timeline({
         title: '',
         notes: '',
       })
-      setPopoverTop(minutesToY(lo, pxPerMinute))
+      setEditingId(null)
+      placePopover(minutesToY(lo, pxPerMinute))
     }
 
     window.addEventListener('mousemove', onMove)
@@ -135,8 +150,31 @@ export function Timeline({
 
   const handleSave = async () => {
     if (!draft?.title.trim()) return
-    await onCreate(draft)
+    if (editingId) {
+      await onUpdate(editingId, {
+        start_minutes: draft.start_minutes,
+        end_minutes: draft.end_minutes,
+        title: draft.title.trim(),
+        notes: draft.notes,
+      })
+    } else {
+      await onCreate(draft)
+    }
     setDraft(null)
+    setEditingId(null)
+  }
+
+  const handleEdit = (entry: TimeEntry) => {
+    setDrag(null)
+    setHoverY(null)
+    setDraft({
+      start_minutes: entry.start_minutes,
+      end_minutes: entry.end_minutes,
+      title: entry.title,
+      notes: entry.notes ?? '',
+    })
+    setEditingId(entry.id)
+    placePopover(minutesToY(entry.start_minutes, pxPerMinute))
   }
 
   const dragRect = drag
@@ -182,35 +220,28 @@ export function Timeline({
       {/* 缩放控制条 */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border/60 shrink-0">
         <span className="text-xs text-text-weak">时间轴精度</span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={zoomOut}
-            disabled={zoomIndex === 0}
-            className="w-7 h-7 rounded-md border border-border text-sm hover:bg-bg disabled:opacity-30 disabled:cursor-not-allowed"
-            title="缩小 (Ctrl+滚轮)"
-          >
-            −
-          </button>
-          <span className="text-xs text-text min-w-[52px] text-center font-medium">
-            {zoom.label}
-          </span>
-          <button
-            type="button"
-            onClick={zoomIn}
-            disabled={zoomIndex === ZOOM_LEVELS.length - 1}
-            className="w-7 h-7 rounded-md border border-border text-sm hover:bg-bg disabled:opacity-30 disabled:cursor-not-allowed"
-            title="放大 (Ctrl+滚轮)"
-          >
-            +
-          </button>
+        <div className="inline-flex rounded-lg border border-border bg-bg/60 p-0.5">
+          {ZOOM_LEVELS.map((level, index) => (
+            <button
+              key={level.id}
+              type="button"
+              onClick={() => setZoomIndex(index)}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                index === zoomIndex
+                  ? 'bg-card text-text shadow-sm'
+                  : 'text-text-weak hover:text-text'
+              }`}
+              title={`${level.snapMinutes} 分钟吸附`}
+            >
+              {level.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto timeline-scroll px-4 py-3"
-        onWheel={handleWheel}
       >
         <div className="flex gap-0" style={{ minHeight: height + 24 }}>
           {/* 左侧时间刻度 */}
@@ -299,6 +330,7 @@ export function Timeline({
                 entry={entry}
                 top={minutesToY(entry.start_minutes, pxPerMinute)}
                 height={(entry.end_minutes - entry.start_minutes) * pxPerMinute}
+                onEdit={handleEdit}
                 onCycleEfficiency={onCycleEfficiency}
                 onDelete={onDelete}
               />
@@ -309,9 +341,14 @@ export function Timeline({
               <RecordPopover
                 draft={draft}
                 anchorTop={popoverTop}
+                side={popoverSide}
+                title={editingId ? '编辑记录' : '记录这段时间'}
                 onChange={(patch) => setDraft((d) => d && { ...d, ...patch })}
                 onSave={handleSave}
-                onCancel={() => setDraft(null)}
+                onCancel={() => {
+                  setDraft(null)
+                  setEditingId(null)
+                }}
               />
             )}
           </div>

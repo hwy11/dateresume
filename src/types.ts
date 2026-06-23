@@ -1,4 +1,5 @@
 export type Efficiency = 'none' | 'high' | 'medium' | 'low'
+export type ExportRange = 'day' | 'week' | 'month'
 
 export interface TimeEntry {
   id: string

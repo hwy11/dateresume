@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react'
 import type { DraftEntry } from '../types'
+import { minutesToTime, timeToMinutes } from '../lib/time'
 
 interface RecordPopoverProps {
   draft: DraftEntry
   anchorTop: number
+  side: 'left' | 'right' | 'inside'
+  title: string
   onChange: (patch: Partial<DraftEntry>) => void
   onSave: () => void
   onCancel: () => void
@@ -12,11 +15,16 @@ interface RecordPopoverProps {
 export function RecordPopover({
   draft,
   anchorTop,
+  side,
+  title,
   onChange,
   onSave,
   onCancel,
 }: RecordPopoverProps) {
   const titleRef = useRef<HTMLInputElement>(null)
+  const isValid = Boolean(
+    draft.title.trim() && draft.end_minutes > draft.start_minutes,
+  )
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -30,13 +38,51 @@ export function RecordPopover({
     if (e.key === 'Escape') onCancel()
   }
 
+  const updateTime = (key: 'start_minutes' | 'end_minutes', value: string) => {
+    const minutes = timeToMinutes(value)
+    if (minutes === null) return
+    onChange({ [key]: minutes })
+  }
+
   return (
     <div
-      className="absolute left-[calc(100%+12px)] z-40 w-72 bg-card border border-border rounded-xl shadow-lg p-4"
-      style={{ top: Math.max(8, anchorTop) }}
+      className={`absolute z-40 w-72 max-w-[calc(100%-16px)] bg-card border border-border rounded-xl shadow-lg p-4 ${
+        side === 'right'
+          ? 'left-[calc(100%+12px)]'
+          : side === 'left'
+            ? 'right-[calc(100%+12px)]'
+            : 'left-2'
+      }`}
+      style={{ top: anchorTop }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <h3 className="text-sm font-semibold text-text mb-3">记录这段时间</h3>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h3 className="text-sm font-semibold text-text">{title}</h3>
+        <span className="text-xs text-text-weak">
+          {minutesToTime(draft.start_minutes)}–{minutesToTime(draft.end_minutes)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <label className="text-xs text-text-weak block">
+          开始
+          <input
+            type="time"
+            value={minutesToTime(draft.start_minutes)}
+            onChange={(e) => updateTime('start_minutes', e.target.value)}
+            className="mt-1 w-full border border-border rounded-lg px-2 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </label>
+        <label className="text-xs text-text-weak block">
+          结束
+          <input
+            type="time"
+            value={minutesToTime(draft.end_minutes)}
+            onChange={(e) => updateTime('end_minutes', e.target.value)}
+            className="mt-1 w-full border border-border rounded-lg px-2 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </label>
+      </div>
 
       <label className="text-xs text-text-weak mb-1 block">做了什么</label>
       <input
@@ -68,7 +114,7 @@ export function RecordPopover({
         <button
           type="button"
           onClick={onSave}
-          disabled={!draft.title.trim()}
+          disabled={!isValid}
           className="px-4 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:opacity-40"
         >
           保存

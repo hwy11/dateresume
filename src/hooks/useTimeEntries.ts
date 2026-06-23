@@ -15,6 +15,32 @@ function loadLocal(userId: string, dateKey: string): TimeEntry[] {
   }
 }
 
+function loadLocalRange(
+  userId: string,
+  startDate: string,
+  endDate: string,
+): TimeEntry[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY)
+    if (!raw) return []
+    const all: TimeEntry[] = JSON.parse(raw)
+    return all
+      .filter(
+        (e) =>
+          e.user_id === userId &&
+          e.entry_date >= startDate &&
+          e.entry_date <= endDate,
+      )
+      .sort((a, b) =>
+        a.entry_date === b.entry_date
+          ? a.start_minutes - b.start_minutes
+          : a.entry_date.localeCompare(b.entry_date),
+      )
+  } catch {
+    return []
+  }
+}
+
 function saveLocal(entries: TimeEntry[]) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(entries))
 }
@@ -102,7 +128,15 @@ export function useTimeEntries(userId: string | undefined, dateKey: string) {
   )
 
   const updateEntry = useCallback(
-    async (id: string, patch: Partial<Pick<TimeEntry, 'title' | 'notes' | 'efficiency'>>) => {
+    async (
+      id: string,
+      patch: Partial<
+        Pick<
+          TimeEntry,
+          'title' | 'notes' | 'efficiency' | 'start_minutes' | 'end_minutes'
+        >
+      >,
+    ) => {
       if (!userId) return
 
       if (!supabase) {
@@ -156,6 +190,29 @@ export function useTimeEntries(userId: string | undefined, dateKey: string) {
     [updateEntry],
   )
 
+  const fetchEntriesRange = useCallback(
+    async (startDate: string, endDate: string) => {
+      if (!userId) return []
+
+      if (!supabase) {
+        return loadLocalRange(userId, startDate, endDate)
+      }
+
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('entry_date', startDate)
+        .lte('entry_date', endDate)
+        .order('entry_date')
+        .order('start_minutes')
+
+      if (error) throw error
+      return (data ?? []) as TimeEntry[]
+    },
+    [userId],
+  )
+
   return {
     entries,
     loading,
@@ -163,6 +220,7 @@ export function useTimeEntries(userId: string | undefined, dateKey: string) {
     updateEntry,
     deleteEntry,
     cycleEfficiency,
+    fetchEntriesRange,
     refetch: fetchEntries,
   }
 }

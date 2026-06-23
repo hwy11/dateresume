@@ -7,22 +7,33 @@ import { TodayOverview } from './components/TodayOverview'
 import { useAuth } from './hooks/useAuth'
 import { useTimeEntries } from './hooks/useTimeEntries'
 import { entriesToMarkdown } from './lib/markdown'
-import { formatDateKey } from './lib/time'
+import { addDays, formatDateKey } from './lib/time'
 import { supabaseConfigured } from './lib/supabase'
-import type { DraftEntry } from './types'
+import type { DraftEntry, ExportRange, TimeEntry } from './types'
+
+const RANGE_DAYS: Record<ExportRange, number> = {
+  day: 1,
+  week: 7,
+  month: 30,
+}
 
 export default function App() {
   const { user, loading: authLoading, signOut, supabaseConfigured: configured } = useAuth()
   const [dateKey, setDateKey] = useState(formatDateKey(new Date()))
   const [showMenu, setShowMenu] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [exportRange, setExportRange] = useState<ExportRange>('day')
+  const [exportEntries, setExportEntries] = useState<TimeEntry[]>([])
+  const [exportLoading, setExportLoading] = useState(false)
 
   const {
     entries,
     loading: entriesLoading,
     createEntry,
+    updateEntry,
     deleteEntry,
     cycleEfficiency,
+    fetchEntriesRange,
   } = useTimeEntries(user?.id, dateKey)
 
   useEffect(() => {
@@ -30,6 +41,29 @@ export default function App() {
     if (showMenu) document.addEventListener('click', close)
     return () => document.removeEventListener('click', close)
   }, [showMenu])
+
+  const exportStartDate = addDays(dateKey, -(RANGE_DAYS[exportRange] - 1))
+  const markdown = entriesToMarkdown(exportStartDate, dateKey, exportEntries)
+  const exportFileStem =
+    exportStartDate === dateKey ? dateKey : `${exportStartDate}_${dateKey}`
+
+  useEffect(() => {
+    if (!showExport) return
+
+    let cancelled = false
+    setExportLoading(true)
+    fetchEntriesRange(exportStartDate, dateKey)
+      .then((rangeEntries) => {
+        if (!cancelled) setExportEntries(rangeEntries)
+      })
+      .finally(() => {
+        if (!cancelled) setExportLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [dateKey, exportStartDate, fetchEntriesRange, showExport])
 
   if (authLoading) {
     return (
@@ -47,8 +81,6 @@ export default function App() {
   const handleCreate = async (draft: DraftEntry) => {
     await createEntry(draft)
   }
-
-  const markdown = entriesToMarkdown(dateKey, entries)
 
   return (
     <div className="min-h-full p-4 md:p-6 flex items-start justify-center">
@@ -77,6 +109,7 @@ export default function App() {
                 dateKey={dateKey}
                 entries={entries}
                 onCreate={handleCreate}
+                onUpdate={updateEntry}
                 onCycleEfficiency={cycleEfficiency}
                 onDelete={deleteEntry}
               />
@@ -89,7 +122,10 @@ export default function App() {
       {showExport && (
         <ExportModal
           content={markdown}
-          dateKey={dateKey}
+          fileStem={exportFileStem}
+          range={exportRange}
+          loading={exportLoading}
+          onRangeChange={setExportRange}
           onClose={() => setShowExport(false)}
         />
       )}

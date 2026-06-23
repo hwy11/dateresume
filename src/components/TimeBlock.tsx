@@ -12,6 +12,7 @@ interface TimeBlockProps {
   entry: TimeEntry
   top: number
   height: number
+  onEdit: (entry: TimeEntry) => void
   onCycleEfficiency: (entry: TimeEntry) => Promise<Efficiency>
   onDelete: (id: string) => void
 }
@@ -20,13 +21,14 @@ export function TimeBlock({
   entry,
   top,
   height,
+  onEdit,
   onCycleEfficiency,
   onDelete,
 }: TimeBlockProps) {
   const [flashLabel, setFlashLabel] = useState<string | null>(null)
   const [hovered, setHovered] = useState(false)
 
-  const handleClick = async (e: React.MouseEvent) => {
+  const handleCycle = async (e: React.MouseEvent) => {
     e.stopPropagation()
     const next = await onCycleEfficiency(entry)
     setFlashLabel(EFFICIENCY_LABELS[next])
@@ -46,14 +48,18 @@ export function TimeBlock({
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={handleClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation()
+        onEdit(entry)
+      }}
     >
       <div
         className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg transition-colors duration-300"
         style={{ background: barColor }}
       />
 
-      <div className="pl-3 pr-6 py-1.5 h-full flex flex-col justify-center min-h-0">
+      <div className="pl-3 pr-20 py-1.5 h-full flex flex-col justify-center min-h-0">
         <div className="text-sm font-medium text-text truncate leading-tight">
           {entry.title || '（无标题）'}
         </div>
@@ -62,9 +68,18 @@ export function TimeBlock({
         </div>
       </div>
 
+      <button
+        type="button"
+        onClick={handleCycle}
+        className="absolute top-1 right-7 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-card/80 border border-border/70 text-text-weak hover:text-text hover:bg-card"
+        title="切换效率"
+      >
+        {EFFICIENCY_LABELS[entry.efficiency]}
+      </button>
+
       {entry.notes && (
         <div
-          className="absolute bottom-1.5 right-6 text-text-weak"
+          className="absolute bottom-1.5 right-7 text-text-weak"
           title={entry.notes}
         >
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -74,7 +89,7 @@ export function TimeBlock({
       )}
 
       {flashLabel && (
-        <span className="absolute top-1 right-6 text-[10px] font-medium px-1.5 py-0.5 rounded bg-card border border-border efficiency-tag-flash">
+        <span className="absolute top-7 right-7 text-[10px] font-medium px-1.5 py-0.5 rounded bg-card border border-border efficiency-tag-flash">
           {flashLabel}
         </span>
       )}
