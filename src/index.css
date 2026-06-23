@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f6f7fb;
+  --color-card: #ffffff;
+  --color-text: #111827;
+  --color-text-weak: #6b7280;
+  --color-border: #e5e7eb;
+  --color-eff-high: #22c55e;
+  --color-eff-medium: #eab308;
+  --color-eff-low: #f97316;
+  --color-eff-none: #9ca3af;
+  --color-select: #3b82f6;
+  --radius-card: 18px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 时间轴缩放时保持拖拽手感 */
+.timeline-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.timeline-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.timeline-scroll::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+@keyframes fade-tag {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.efficiency-tag-flash {
+  animation: fade-tag 1.2s ease forwards;
+}
